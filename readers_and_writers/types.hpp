@@ -6,7 +6,7 @@
 #include <thread>
 #include <condition_variable>
 #include <random>
-#include <functional> // Dodane dla obsługi std::function, choć szablony też dają radę
+#include <functional> 
 
 class Book {
 private:
@@ -17,7 +17,6 @@ private:
     std::atomic<bool> first_write_done{false};
     bool stopped{false};
 public:
-    // Szablon pozwala przyjąć lambdę i wykonać ją W ŚRODKU sekcji krytycznej
     template <typename Func>
     void set_num(int new_num, Func&& print_action) {
         std::unique_lock<std::shared_mutex> lock(m);
@@ -28,7 +27,6 @@ public:
         read_count = 0;
         first_write_done = true;
         
-        // ZMIANA: Wypisujemy tekst ZANIM zdejmiemy blokadę i wybudzimy inne wątki
         print_action(); 
         
         cv.notify_all();
@@ -116,7 +114,7 @@ public:
     }
 
     static int get_random() {
-        std::random_device rd;
+        thread_local std::random_device rd;
         thread_local std::mt19937 gen(rd());
         std::uniform_int_distribution<> distr(1, 100);
         return distr(gen);
