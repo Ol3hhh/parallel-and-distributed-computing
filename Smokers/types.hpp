@@ -63,7 +63,7 @@ public:
     void run();
     void join();
 
-    // Bezpieczna funkcja wypisująca komunikaty na standardowe wyjście z użyciem semafora
+    // funkcja wypisująca komunikaty na standardowe wyjście z użyciem semafora
     static void print(const std::string& str, const int& id) {
         print_sem.acquire(); // Zablokowanie dostępu do konsoli dla innych wątków
         std::cout << "Smoker " << id << ": " << str << std::endl;

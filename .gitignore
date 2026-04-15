@@ -43,3 +43,5 @@
 build/
 bin/
 obj/
+.vs/
+.vscode/

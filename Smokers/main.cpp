@@ -8,7 +8,7 @@
 int main(int argc, char *argv[]) {
     int k = 3; //  palaczy
     int l = 2; //  ubijaczy
-    int m = 2; //  pudełek zapałek
+    int m = 1; //  pudełek zapałek
 
     if (argc == 4) {
         k = std::stoi(argv[1]); 
