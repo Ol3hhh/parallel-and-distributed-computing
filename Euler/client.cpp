@@ -54,6 +54,7 @@ float Client::run() {
 }
 
 inline float Client::calculate(const int &k) {
+#if defined(__AVX2__)
     // 1. Generujemy wektor [k, k+1, k+2, k+3, k+4, k+5, k+6, k+7]
     
     // Tworzymy wektor stałych offsetów: [0, 1, 2, 3, 4, 5, 6, 7]
@@ -83,4 +84,11 @@ inline float Client::calculate(const int &k) {
 
     // Wyciągamy finalny wynik float
     return _mm_cvtss_f32(sum128);
+#else
+    float sum = 0.0f;
+    for (int i = 0; i < 8; ++i) {
+        sum += 1.0f / static_cast<float>(k + i);
+    }
+    return sum;
+#endif
 }
