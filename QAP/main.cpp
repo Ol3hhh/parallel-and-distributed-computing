@@ -4,8 +4,12 @@
 #include "types.hpp"
 #include "graph.hpp"
 #include "SA.hpp"
+#include "utils.hpp"
 
-// Poprawiona, bezpieczna funkcja do wypisywania macierzy
+#ifdef USE_GPU
+    #include "CUDA_graph.cuh"
+#endif
+
 void print_matrix(const std::array<float, NN>& graph) {
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
@@ -17,41 +21,103 @@ void print_matrix(const std::array<float, NN>& graph) {
 }
 
 int main() {
-    // 1. Inicjalizacja generatora losowego zdefiniowanego w types.hpp
-    // (Ponieważ 'gen' jest tam 'inline', jest już gotowy do użycia)
 
-    // 2. Przypisanie początkowe: Urządzenie 'i' znajduje się w lokalizacji 'i'
     std::iota(devices.begin(), devices.end(), 0);
 
-    // 3. Wygenerowanie symetrycznych macierzy problemu
-    generate_graph(dc); // Macierz kosztów / przepływów
-    generate_graph(dd); // Macierz odległości
+    generate_graph(dc); 
+    generate_graph(dd); 
 
-    // Wypisujemy macierze tylko jeśli N jest na tyle małe, by zmieściły się na ekranie
     if constexpr (N <= 10) {
-        std::cout << "--- Macierz przeplywow (dc) ---\n";
+        std::cout << "--- Flow matrix (dc) ---\n";
         print_matrix(dc);
         
-        std::cout << "--- Macierz odleglosci (dd) ---\n";
+        std::cout << "--- Distance matrix (dd) ---\n";
         print_matrix(dd);
     }
 
-    // 4. Ocena rozwiązania początkowego
     float initial_cost = f(devices, dc, dd);
-    std::cout << "Koszt poczatkowy (przed SA): " << initial_cost << "\n";
+    std::cout << "Initial cost (before SA): " << initial_cost << "\n";
 
-    // 5. Uruchomienie Symulowanego Wyżarzania
-    std::cout << "Rozpoczynam optymalizacje...\n";
-    SA(devices, dc, dd, gen);
+#ifdef USE_GPU
+    std::cout << "[METHOD] Using GPU (CUDA Driver API) method...\n";
 
-    // 6. Ocena i prezentacja rozwiązania końcowego
-    float final_cost = f(devices, dc, dd);
-    std::cout << "Koszt koncowy (po SA): " << final_cost << "\n\n";
+    cuInit(0);
+    CUdevice cuDevice;
+    cuDeviceGet(&cuDevice, 0); 
+    
+    CUcontext cuContext;
+    cuDevicePrimaryCtxRetain(&cuContext, cuDevice); 
+    
+    cuCtxSetCurrent(cuContext);
 
-    std::cout << "--- Najlepsze znalezione przypisanie ---\n";
-    for (int i = 0; i < N; ++i) {
-        std::cout << "Urzadzenie " << i << " -> Lokalizacja " << devices[i] << "\n";
+    CUmodule module;
+    CUresult res = cuModuleLoad(&module, "kernels.fatbin"); 
+    if (res != CUDA_SUCCESS) {
+        const char* errStr = nullptr;
+        cuGetErrorName(res, &errStr); 
+        std::cerr << "Can't load kernels.fatbin!\n"; 
+        std::cerr << "Error code: " << res;
+        if (errStr) std::cerr << " (" << errStr << ")";
+        std::cerr << "\n";
+        return 1;
     }
+
+    config cfg;
+    cfg.N = N;
+    cfg.T = 100.0f;
+    cfg.T_min = 0.1f;
+    cfg.a = 0.99f;
+
+    cuMemAlloc(&cfg.devices, N * sizeof(int));
+    cuMemAlloc(&cfg.dc, N * N * sizeof(float));
+    cuMemAlloc(&cfg.dd, N * N * sizeof(float));
+    cuMemAlloc(&cfg.E, sizeof(float));
+
+    float zero = 0.0f;
+    cuMemcpyHtoD(cfg.E, &zero, sizeof(float));
+    
+    size_t state_size = get_curand_state_size();
+    cuMemAlloc(&cfg.state, 128 * state_size); 
+
+    cuMemcpyHtoD(cfg.devices, devices.data(), N * sizeof(int));
+    cuMemcpyHtoD(cfg.dc, dc.data(), N * N * sizeof(float));
+    cuMemcpyHtoD(cfg.dd, dd.data(), N * N * sizeof(float));
+
+    run_graph_driver_api(cfg, module); 
+
+    cuMemcpyDtoH(devices.data(), cfg.devices, N * sizeof(int));
+
+    float final_cost = f(devices, dc, dd);
+    std::cout << "Final cost (after SA): " << final_cost << "\n\n";
+
+    std::cout << "--- Best found assignment ---\n";
+    if (N <= 10) {
+        for (int i = 0; i < N; ++i) {
+            std::cout << "Device " << i << " -> Location " << devices[i] << "\n";
+        }
+    }
+
+    cuMemFree(cfg.devices);
+    cuMemFree(cfg.dc);
+    cuMemFree(cfg.dd);
+    cuMemFree(cfg.E);
+    cuMemFree(cfg.state);
+    
+    cuModuleUnload(module);
+    
+    cuDevicePrimaryCtxRelease(cuDevice); 
+
+#else
+
+    float final_cost = f(devices, dc, dd);
+    std::cout << "Final cost (after SA): " << final_cost << "\n\n";
+
+    std::cout << "--- Best found assignment ---\n";
+    for (int i = 0; i < N; ++i) {
+        std::cout << "Device " << i << " -> Location " << devices[i] << "\n";
+    }
+
+#endif
 
     return 0;
 }

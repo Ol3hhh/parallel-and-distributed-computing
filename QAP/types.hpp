@@ -6,7 +6,7 @@
 inline std::random_device rd;
 inline std::mt19937 gen(rd());
 
-constexpr int N = 5;
+constexpr int N = 150;
 constexpr int NN = N*N;
 inline std::array<float, NN> dc;
 inline std::array<float, NN> dd;

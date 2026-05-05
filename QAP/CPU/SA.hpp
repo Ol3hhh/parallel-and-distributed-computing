@@ -6,7 +6,6 @@
 #include <tuple>
 
 #include "types.hpp"
-#include "utils.hpp"
 
 bool P(float& E, float& E_next, float& T, std::mt19937& gen);
 
